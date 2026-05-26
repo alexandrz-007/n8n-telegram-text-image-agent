@@ -1,0 +1,608 @@
+{
+  "name": "Telegram AI ассистент (OpenRouter + память + Nano Banana 2)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Настройка (n8n 2.21.7+)\n\nРепозиторий: workflows/n8n-telegram-openrouter-agent.json\n\n**Ключи:**\n1. **Telegram API** — @BotFather\n2. **OpenRouter** — https://openrouter.ai/keys (HTTP Header: `Authorization: Bearer <KEY>`)\n3. **SerpAPI** — serpapi.com\n4. **N8N_WEBHOOK_URL** — публичный HTTPS\n\nПривязать credentials: Telegram (все узлы Telegram), **OpenRouter Bearer** (узел «Nano Banana 2 OpenRouter» и tool «Редактор_изображений» — тип httpHeaderAuth).\n\n**Текст:** gpt-4o-mini · **Картинки:** `google/gemini-3.1-flash-image-preview` (Nano Banana 2)\n\n**Изображения:**\n• Фото + подпись → правка\n• `нарисуй …` → генерация\n• После фото: «отредактируй / улучши фото …» → кэш\n• Агент → tool **Редактор_изображений**",
+        "height": 420,
+        "width": 560,
+        "color": 5
+      },
+      "id": "a1000001-0000-4000-8000-000000000001",
+      "name": "Инструкция",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-320, -240]
+    },
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "a1000002-0000-4000-8000-000000000002",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "webhookId": "telegram-openrouter-agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $input.first().json.message || {};\nconst text = (msg.text || msg.caption || '').trim();\nconst chatId = msg.chat?.id;\n\nif (msg.photo?.length) {\n  const largest = msg.photo[msg.photo.length - 1];\n  return [{\n    json: {\n      route: 'photo_edit',\n      chatId,\n      text: text || 'Отредактируй это изображение качественно и естественно.',\n      fileId: largest.file_id,\n      message: msg\n    }\n  }];\n}\n\nif (!text) {\n  return [{ json: { route: 'no_text', chatId, text: '', message: msg } }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.imageCache) staticData.imageCache = {};\nconst chatKey = String(chatId);\nconst hasCache = Boolean(staticData.imageCache[chatKey]);\n\nlet route = 'chat';\nif (text === '/start') route = 'start';\nelse if (text === '/help') route = 'help';\nelse if (/^нарисуй\\s+/i.test(text)) route = 'image_generate';\nelse if (hasCache && /(отредактир|редактир|измени|улучши|добавь|убери|сделай).*(фото|изображ|картин)|^(сделай|убери|добавь)\\b/i.test(text)) route = 'image_edit_cached';\n\nconst imagePrompt = route === 'image_generate' ? text.replace(/^нарисуй\\s+/i, '').trim() : '';\n\nif (route === 'image_generate' && !imagePrompt) {\n  return [{ json: { route: 'image_generate_empty', chatId, text, message: msg } }];\n}\n\nreturn [{ json: { route, chatId, text, message: msg, imagePrompt, fileId: null } }];"
+      },
+      "id": "a1000003-0000-4000-8000-000000000003",
+      "name": "Подготовка сообщения",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "no_text", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "no_text"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "start", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "help", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "photo_edit", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "photo_edit"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "image_generate", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image_generate"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "image_generate_empty", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image_generate_empty"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+                "conditions": [{ "leftValue": "={{ $json.route }}", "rightValue": "image_edit_cached", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image_edit_cached"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "fallbackOutputName": "chat" }
+      },
+      "id": "a1000004-0000-4000-8000-000000000004",
+      "name": "Маршрут",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "Отправьте текст, фото с подписью (что изменить) или команду «нарисуй описание».",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000005-0000-4000-8000-000000000005",
+      "name": "Нет текста",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, -120]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "Привет! Я AI-ассистент на русском.\n\nТекст: диалог, Wikipedia, погода, SerpAPI, курсы, расчёты.\n\nКартинки (Nano Banana 2 / OpenRouter):\n• Фото + подпись — редактирование\n• «нарисуй закат над морем» — генерация\n• После фото можно написать «сделай ч/б» / «улучши фото»\n\n/help — справка",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000006-0000-4000-8000-000000000006",
+      "name": "Ответ /start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, 20]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "Справка\n\n• Диалог — память ~15 сообщений\n• Calculator · Wikipedia · Погода wttr · SerpAPI · Курсы валют · Think\n• Редактор_изображений — генерация/правка (агент)\n\nИзображения:\n• Фото + подпись → правка (Nano Banana 2)\n• «нарисуй …» → генерация\n• «улучши фото» после отправки снимка — правка кэша\n\nКлючи: Telegram + OpenRouter (httpHeaderAuth) + SerpAPI\nТекст: gpt-4o-mini · Картинки: gemini-3.1-flash-image-preview\n\n/start /help",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000007-0000-4000-8000-000000000007",
+      "name": "Ответ /help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, 140]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "Укажите описание после «нарисуй». Пример: нарисуй закат над морем",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000027-0000-4000-8000-000000000027",
+      "name": "Пустой нарисуй",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, 260]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $json.fileId }}",
+        "download": true,
+        "additionalFields": {
+          "mimeType": "image/jpeg"
+        }
+      },
+      "id": "a1000018-0000-4000-8000-000000000018",
+      "name": "Скачать фото",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [980, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const prep = $('Подготовка сообщения').first().json;\n  const chatId = prep.chatId;\n  let instruction = prep.text;\n  let imageDataUrl = null;\n  const staticData = $getWorkflowStaticData('global');\n  staticData.imageCache = staticData.imageCache || {};\n  const chatKey = String(chatId);\n\n  async function binaryItemToDataUrl(item, itemIndex) {\n    if (!item?.binary) return null;\n    const binKey = item.binary.data ? 'data' : Object.keys(item.binary)[0];\n    if (!binKey) return null;\n    const meta = item.binary[binKey];\n    const buffer = await this.helpers.getBinaryDataBuffer(itemIndex, binKey);\n    const mime = meta?.mimeType || 'image/jpeg';\n    return `data:${mime};base64,${buffer.toString('base64')}`;\n  }\n\n  if (prep.route === 'photo_edit') {\n    const items = $input.all();\n    let loaded = false;\n    for (let i = 0; i < items.length; i++) {\n      try {\n        imageDataUrl = await binaryItemToDataUrl.call(this, items[i], i);\n        if (imageDataUrl) {\n          loaded = true;\n          break;\n        }\n      } catch (_) {\n        /* try next item */\n      }\n    }\n    if (!loaded) {\n      const dl = $('Скачать фото').first();\n      if (dl?.binary) {\n        imageDataUrl = await binaryItemToDataUrl.call(this, dl, 0);\n      }\n    }\n    if (imageDataUrl) {\n      staticData.imageCache[chatKey] = imageDataUrl;\n    } else {\n      return [{\n        json: {\n          chatId,\n          error: true,\n          errorText: 'Не удалось прочитать фото из Telegram. В узле «Скачать фото» включите Download и привяжите Telegram API credential.'\n        }\n      }];\n    }\n  } else if (prep.route === 'image_edit_cached') {\n    imageDataUrl = staticData.imageCache[chatKey] || null;\n    if (!imageDataUrl) {\n      return [{\n        json: {\n          chatId,\n          error: true,\n          errorText: 'Нет сохранённого изображения. Сначала отправьте фото с подписью или «нарисуй …».'\n        }\n      }];\n    }\n  } else if (prep.route === 'image_generate') {\n    instruction = `Сгенерируй детальное качественное изображение: ${prep.imagePrompt || instruction}`;\n  }\n\n  const content = [];\n  if (imageDataUrl) {\n    content.push({ type: 'image_url', image_url: { url: imageDataUrl } });\n  }\n  content.push({ type: 'text', text: instruction });\n\n  return [{\n    json: {\n      chatId,\n      caption: instruction.slice(0, 500),\n      openRouterBody: {\n        model: 'google/gemini-3.1-flash-image-preview',\n        modalities: ['image', 'text'],\n        messages: [{ role: 'user', content }]\n      }\n    }\n  }];\n} catch (err) {\n  const prep = $('Подготовка сообщения').first()?.json || {};\n  return [{\n    json: {\n      chatId: prep.chatId,\n      error: true,\n      errorText: `Ошибка подготовки изображения: ${err.message || String(err)}`\n    }\n  }];\n}"
+      },
+      "id": "a1000019-0000-4000-8000-000000000019",
+      "name": "Собрать запрос Nano Banana",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "err-001",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000028-0000-4000-8000-000000000028",
+      "name": "Ошибка сборки?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1420, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "HTTP-Referer", "value": "https://n8n.io" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openRouterBody) }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "a1000020-0000-4000-8000-000000000020",
+      "name": "Nano Banana 2 OpenRouter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 540],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENROUTER_HEADER_CRED_ID",
+          "name": "OpenRouter Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const collect = $('Собрать запрос Nano Banana').first().json;\nconst chatId = collect.chatId;\nconst caption = collect.caption || '';\n\nif (collect.error) {\n  return [{ json: { chatId, text: collect.errorText, responseType: 'text' } }];\n}\n\nconst data = $input.first().json;\nif (data.error || (data.statusCode && data.statusCode >= 400)) {\n  const errMsg = data.error?.message || data.message || JSON.stringify(data.error || data).slice(0, 300);\n  return [{ json: { chatId, text: `Ошибка OpenRouter: ${errMsg}`, responseType: 'text' } }];\n}\n\nconst message = data.choices?.[0]?.message;\nconst images = message?.images || [];\nlet imageUrl = images[0]?.image_url?.url;\n\nif (!imageUrl && typeof message?.content === 'string') {\n  const m = message.content.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/);\n  if (m) imageUrl = m[0];\n}\n\nif (!imageUrl) {\n  const fallback = typeof message?.content === 'string' ? message.content : 'Изображение не получено от API.';\n  return [{ json: { chatId, text: fallback.slice(0, 3500), responseType: 'text' } }];\n}\n\nconst base64Match = imageUrl.match(/^data:image\\/([^;]+);base64,(.+)$/);\nif (!base64Match) {\n  return [{ json: { chatId, text: 'Неверный формат изображения в ответе API.', responseType: 'text' } }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.imageCache = staticData.imageCache || {};\nstaticData.imageCache[String(chatId)] = imageUrl;\n\nreturn [{\n  json: { chatId, caption, responseType: 'photo' },\n  binary: {\n    image: {\n      data: base64Match[2],\n      mimeType: `image/${base64Match[1]}`,\n      fileName: 'nano_banana.png'\n    }\n  }\n}];"
+      },
+      "id": "a1000021-0000-4000-8000-000000000021",
+      "name": "Обработать картинку",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const collect = $('Собрать запрос Nano Banana').first().json;\nreturn [{ json: { chatId: collect.chatId, text: collect.errorText, responseType: 'text' } }];"
+      },
+      "id": "a1000029-0000-4000-8000-000000000029",
+      "name": "Текст ошибки сборки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 380]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+                "conditions": [{ "leftValue": "={{ $json.responseType }}", "rightValue": "photo", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "photo"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "fallbackOutputName": "text" }
+      },
+      "id": "a1000022-0000-4000-8000-000000000022",
+      "name": "Маршрут ответа",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [2080, 480]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "image",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "appendAttribution": false
+        }
+      },
+      "id": "a1000023-0000-4000-8000-000000000023",
+      "name": "Ответ фото Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2300, 420]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ ($json.text || 'Ошибка обработки изображения.').toString().slice(0, 4096) }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000024-0000-4000-8000-000000000024",
+      "name": "Ответ текст изображение",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2300, 560]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "Ты универсальный персональный ассистент в Telegram. Отвечай на русском: ясно, дружелюбно и по делу.\n\nИнструменты (вызывай по ситуации):\n• Calculator — точные вычисления, проценты (никогда не считай в уме).\n• Wikipedia — устойчивые факты, определения, биографии, история.\n• Погода_wttr — погода по городу (город латиницей: Moscow, Sochi, London).\n• SerpAPI — актуальное из интернета: новости, цены, события, «что сейчас», свежие данные.\n• Курсы_валют — курсы по API (вход: базовая валюта 3 буквы: USD, EUR, RUB).\n• Think — внутренние рассуждения перед сложным ответом. Не показывай сырой лог Think.\n• Редактор_изображений — генерация или правка картинки (Nano Banana 2). Вход: краткая инструкция на русском или английском. Используй, если пользователь просит нарисовать, сгенерировать, отредактировать изображение. Если нужна правка, но пользователь не присылал фото — попроси прислать фото с подписью. После успешного tool кратко опиши результат текстом.\n\nПравила:\n1. Актуальное → SerpAPI или Курсы_валют.\n2. Факты → Wikipedia.\n3. Погода → Погода_wttr.\n4. Числа → Calculator.\n5. Сложный вопрос → Think, затем ответ.\n6. Картинки → Редактор_изображений или подскажи: «нарисуй …» / фото с подписью.\n7. Учитывай память диалога.\n8. Не выдумывай факты и URL.\n9. Ответ до ~3500 символов.",
+          "maxIterations": 15,
+          "returnIntermediateSteps": false,
+          "passthroughBinaryImages": false
+        }
+      },
+      "id": "a1000008-0000-4000-8000-000000000008",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [980, 700]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": { "temperature": 0.7, "maxTokens": 2048 }
+      },
+      "id": "a1000009-0000-4000-8000-000000000009",
+      "name": "OpenRouter gpt-4o-mini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [560, 1100]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ String($('Подготовка сообщения').item.json.chatId) }}",
+        "contextWindowLength": 15
+      },
+      "id": "a1000010-0000-4000-8000-000000000010",
+      "name": "Память диалога",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [760, 1100]
+    },
+    {
+      "parameters": {},
+      "id": "a1000011-0000-4000-8000-000000000011",
+      "name": "Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [960, 1100]
+    },
+    {
+      "parameters": {},
+      "id": "a1000012-0000-4000-8000-000000000012",
+      "name": "Wikipedia",
+      "type": "@n8n/n8n-nodes-langchain.toolWikipedia",
+      "typeVersion": 1,
+      "position": [1160, 1100]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Получить краткий текстовый прогноз погоды для города. Вход: название города латиницей (Moscow, London, Paris).",
+        "method": "GET",
+        "url": "https://wttr.in/{city}?format=3&lang=ru",
+        "placeholderDefinitions": {
+          "values": [{ "name": "city", "description": "City name for wttr.in, e.g. Moscow, London, Berlin" }]
+        },
+        "optimizeResponse": true,
+        "responseType": "text",
+        "truncateResponse": true,
+        "maxLength": 2000
+      },
+      "id": "a1000013-0000-4000-8000-000000000013",
+      "name": "Погода wttr",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1360, 1100]
+    },
+    {
+      "parameters": {
+        "options": { "gl": "ru", "hl": "ru", "google_domain": "google.ru", "device": "mobile" }
+      },
+      "id": "a1000015-0000-4000-8000-000000000015",
+      "name": "SerpAPI",
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [1560, 1100]
+    },
+    {
+      "parameters": {
+        "description": "Используй для пошагового размышления перед сложным ответом. Не заменяет SerpAPI. Результат Think не показывай дословно."
+      },
+      "id": "a1000016-0000-4000-8000-000000000016",
+      "name": "Think",
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [1760, 1100]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Актуальные курсы валют. Вход: код базовой валюты 3 буквы (USD, EUR, RUB).",
+        "method": "GET",
+        "url": "https://open.er-api.com/v6/latest/{currency}",
+        "placeholderDefinitions": {
+          "values": [{ "name": "currency", "description": "3-letter ISO currency code, e.g. USD, EUR, RUB" }]
+        },
+        "optimizeResponse": true,
+        "responseType": "json",
+        "fieldsToInclude": "selected",
+        "fields": "base_code, rates, time_last_update_utc"
+      },
+      "id": "a1000017-0000-4000-8000-000000000017",
+      "name": "Курсы валют",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [1960, 1100]
+    },
+    {
+      "parameters": {
+        "name": "Редактор_изображений",
+        "description": "Генерация или редактирование изображения через OpenRouter Nano Banana 2 (google/gemini-3.1-flash-image-preview). Передай одну строку — что нарисовать или как изменить фото. Если в кэше чата есть последнее изображение, оно будет отредактировано. Результат отправится пользователю отдельным сообщением с картинкой.",
+        "jsCode": "const instruction = (typeof query === 'string' ? query : (query?.input || query?.instruction || '')).trim();\nif (!instruction) {\n  return 'Укажите описание изображения или правки.';\n}\n\nconst chatId = String($('Подготовка сообщения').first().json.chatId);\nconst staticData = $getWorkflowStaticData('global');\nstaticData.imageCache = staticData.imageCache || {};\nstaticData.pendingImage = staticData.pendingImage || {};\nconst cached = staticData.imageCache[chatId];\n\nconst content = [];\nif (cached) {\n  content.push({ type: 'image_url', image_url: { url: cached } });\n}\ncontent.push({ type: 'text', text: instruction });\n\nconst body = {\n  model: 'google/gemini-3.1-flash-image-preview',\n  modalities: ['image', 'text'],\n  messages: [{ role: 'user', content }]\n};\n\ntry {\n  const response = await this.helpers.httpRequestWithAuthentication.call(\n    this,\n    'httpHeaderAuth',\n    {\n      method: 'POST',\n      url: 'https://openrouter.ai/api/v1/chat/completions',\n      headers: { 'HTTP-Referer': 'https://n8n.io', 'Content-Type': 'application/json' },\n      body,\n      json: true,\n      timeout: 120000\n    }\n  );\n\n  const message = response?.choices?.[0]?.message;\n  const images = message?.images || [];\n  let imageUrl = images[0]?.image_url?.url;\n  if (!imageUrl && typeof message?.content === 'string') {\n    const m = message.content.match(/data:image\\/[^;]+;base64,[A-Za-z0-9+/=]+/);\n    if (m) imageUrl = m[0];\n  }\n  if (!imageUrl) {\n    return (typeof message?.content === 'string' ? message.content : 'Не удалось получить изображение от API.').slice(0, 500);\n  }\n\n  staticData.imageCache[chatId] = imageUrl;\n  const match = imageUrl.match(/^data:image\\/([^;]+);base64,(.+)$/);\n  if (match) {\n    staticData.pendingImage[chatId] = {\n      base64: match[2],\n      mimeType: `image/${match[1]}`,\n      caption: instruction.slice(0, 500)\n    };\n  }\n  return 'Изображение готово и будет отправлено в чат. Кратко опиши пользователю, что сделано.';\n} catch (e) {\n  return `Ошибка Редактор_изображений: ${e.message || e}. Проверьте credential httpHeaderAuth (OpenRouter Bearer).`;\n}"
+      },
+      "id": "a1000025-0000-4000-8000-000000000025",
+      "name": "Редактор_изображений",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.1,
+      "position": [2160, 1100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_OPENROUTER_HEADER_CRED_ID",
+          "name": "OpenRouter Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = String($('Подготовка сообщения').first().json.chatId);\nconst staticData = $getWorkflowStaticData('global');\nstaticData.pendingImage = staticData.pendingImage || {};\nconst pending = staticData.pendingImage[chatId];\n\nif (pending) {\n  delete staticData.pendingImage[chatId];\n  return [{\n    json: { chatId, caption: pending.caption, responseType: 'photo' },\n    binary: {\n      image: {\n        data: pending.base64,\n        mimeType: pending.mimeType || 'image/png',\n        fileName: 'generated.png'\n      }\n    }\n  }];\n}\n\nconst output = ($input.first().json.output || $input.first().json.text || 'Извините, не удалось сформировать ответ.').toString();\nreturn [{ json: { chatId, text: output.slice(0, 4096), responseType: 'text' } }];"
+      },
+      "id": "a1000026-0000-4000-8000-000000000026",
+      "name": "Проверить pending фото",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 700]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+                "conditions": [{ "leftValue": "={{ $json.responseType }}", "rightValue": "photo", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "photo"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "fallbackOutputName": "text" }
+      },
+      "id": "a1000030-0000-4000-8000-000000000030",
+      "name": "Маршрут ответа агента",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1420, 700]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $json.chatId }}",
+        "binaryData": true,
+        "binaryPropertyName": "image",
+        "additionalFields": {
+          "caption": "={{ $json.caption }}",
+          "appendAttribution": false
+        }
+      },
+      "id": "a1000031-0000-4000-8000-000000000031",
+      "name": "Агент фото Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1640, 640]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "a1000014-0000-4000-8000-000000000014",
+      "name": "Ответ в Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1640, 780]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Подготовка сообщения", "type": "main", "index": 0 }]]
+    },
+    "Подготовка сообщения": {
+      "main": [[{ "node": "Маршрут", "type": "main", "index": 0 }]]
+    },
+    "Маршрут": {
+      "main": [
+        [{ "node": "Нет текста", "type": "main", "index": 0 }],
+        [{ "node": "Ответ /start", "type": "main", "index": 0 }],
+        [{ "node": "Ответ /help", "type": "main", "index": 0 }],
+        [{ "node": "Скачать фото", "type": "main", "index": 0 }],
+        [{ "node": "Собрать запрос Nano Banana", "type": "main", "index": 0 }],
+        [{ "node": "Пустой нарисуй", "type": "main", "index": 0 }],
+        [{ "node": "Собрать запрос Nano Banana", "type": "main", "index": 0 }],
+        [{ "node": "AI Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "Скачать фото": {
+      "main": [[{ "node": "Собрать запрос Nano Banana", "type": "main", "index": 0 }]]
+    },
+    "Собрать запрос Nano Banana": {
+      "main": [[{ "node": "Ошибка сборки?", "type": "main", "index": 0 }]]
+    },
+    "Ошибка сборки?": {
+      "main": [
+        [{ "node": "Текст ошибки сборки", "type": "main", "index": 0 }],
+        [{ "node": "Nano Banana 2 OpenRouter", "type": "main", "index": 0 }]
+      ]
+    },
+    "Текст ошибки сборки": {
+      "main": [[{ "node": "Маршрут ответа", "type": "main", "index": 0 }]]
+    },
+    "Nano Banana 2 OpenRouter": {
+      "main": [[{ "node": "Обработать картинку", "type": "main", "index": 0 }]]
+    },
+    "Обработать картинку": {
+      "main": [[{ "node": "Маршрут ответа", "type": "main", "index": 0 }]]
+    },
+    "Маршрут ответа": {
+      "main": [
+        [{ "node": "Ответ фото Telegram", "type": "main", "index": 0 }],
+        [{ "node": "Ответ текст изображение", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Agent": {
+      "main": [[{ "node": "Проверить pending фото", "type": "main", "index": 0 }]]
+    },
+    "Проверить pending фото": {
+      "main": [[{ "node": "Маршрут ответа агента", "type": "main", "index": 0 }]]
+    },
+    "Маршрут ответа агента": {
+      "main": [
+        [{ "node": "Агент фото Telegram", "type": "main", "index": 0 }],
+        [{ "node": "Ответ в Telegram", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenRouter gpt-4o-mini": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Память диалога": {
+      "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]]
+    },
+    "Calculator": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Wikipedia": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Погода wttr": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "SerpAPI": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Think": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Курсы валют": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "Редактор_изображений": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": false },
+  "versionId": "telegram-openrouter-agent-v3.1-binary-fix"
+}

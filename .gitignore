@@ -1,0 +1,26 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# n8n local
+.n8n/
+*.sqlite
+
+# Node (if added later)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Logs and temp
+*.log
+tmp/
+temp/
