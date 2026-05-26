@@ -36,17 +36,37 @@ Self-hosted workflow для [n8n](https://n8n.io): Telegram-бот с памят
 
 ## Быстрый старт
 
-1. Клонируйте репозиторий.
-2. В n8n: **Workflows → Import from File** → [`workflows/n8n-telegram-openrouter-agent.json`](workflows/n8n-telegram-openrouter-agent.json).
-3. Создайте credentials:
-   - **Telegram API** — токен бота (все узлы Telegram + Trigger).
-   - **Header Auth** (`httpHeaderAuth`) — имя заголовка `Authorization`, значение `Bearer <OPENROUTER_API_KEY>` — для узлов **Nano Banana 2 OpenRouter** и **Редактор_изображений**.
-   - **SerpAPI** — для узла SerpAPI.
-4. Во всех красных узлах выберите созданные credentials (в JSON стоят плейсхолдеры `REPLACE_OPENROUTER_HEADER_CRED_ID`).
-5. Убедитесь, что `N8N_WEBHOOK_URL` указывает на ваш инстанс.
-6. **Activate** workflow и напишите боту в Telegram.
+### Вариант A: Docker (поднять n8n локально)
 
-Подробнее: [docs/SETUP.md](docs/SETUP.md).
+```powershell
+git clone <url-репозитория>
+cd <папка-репозитория>
+copy .env.example .env
+docker compose up -d
+```
+
+Откройте **http://localhost:5678** → создайте аккаунт n8n → импортируйте workflow (шаг 2 ниже).
+
+Для **Telegram** нужен публичный HTTPS URL (`WEBHOOK_URL`) — туннель ngrok или VPS. Подробно: **[docs/DOCKER.md](docs/DOCKER.md)**.
+
+Docker **не** подставляет ключи API и **не** импортирует workflow автоматически.
+
+### Вариант B: Уже установленный n8n
+
+Клонируйте репозиторий и откройте свой n8n — далее **общие шаги** ниже.
+
+### Общие шаги (Docker и свой n8n)
+
+1. **Workflows → Import from File** → [`workflows/n8n-telegram-openrouter-agent.json`](workflows/n8n-telegram-openrouter-agent.json).
+2. Создайте **credentials**:
+   - **Telegram API** — токен бота (все узлы Telegram + Trigger).
+   - **Header Auth** (`httpHeaderAuth`) — заголовок `Authorization`, значение `Bearer <OPENROUTER_API_KEY>` — для **Nano Banana 2 OpenRouter** и **Редактор_изображений**.
+   - **SerpAPI** — для узла SerpAPI.
+3. Во всех красных узлах выберите credentials (в JSON — плейсхолдер `REPLACE_OPENROUTER_HEADER_CRED_ID`).
+4. **WEBHOOK_URL** — публичный HTTPS для Telegram ([docs/DOCKER.md](docs/DOCKER.md) или `N8N_WEBHOOK_URL` на сервере).
+5. **Activate** workflow → напишите боту `/start` в Telegram.
+
+Подробнее: [docs/SETUP.md](docs/SETUP.md) · Docker: [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Использование в Telegram
 
@@ -81,6 +101,7 @@ flowchart TB
 .
 ├── README.md
 ├── LICENSE
+├── docker-compose.yml
 ├── .env.example
 ├── workflows/
 │   └── n8n-telegram-openrouter-agent.json
@@ -89,7 +110,8 @@ flowchart TB
 │   ├── telegram-photo-result.png
 │   └── telegram-agent-chat.png
 └── docs/
-    └── SETUP.md
+    ├── SETUP.md
+    └── DOCKER.md
 ```
 
 ## Стоимость и ограничения
@@ -106,7 +128,7 @@ flowchart TB
 | `Unknown error` в Code после фото | Узел **Скачать фото**: Download = true, credential Telegram; переимпортируйте актуальный workflow (fix `getBinaryDataBuffer(0, 'data')`) |
 | Только текст вместо картинки | OpenRouter credential, баланс, в Execution — есть ли `message.images` в ответе |
 | SerpAPI не работает | Credential SerpAPI в узле tool |
-| Webhook не срабатывает | `N8N_WEBHOOK_URL`, firewall, HTTPS |
+| Webhook не срабатывает | `WEBHOOK_URL` в `.env` (Docker) или `N8N_WEBHOOK_URL`, HTTPS, туннель — [docs/DOCKER.md](docs/DOCKER.md) |
 
 ## Лицензия
 
@@ -118,7 +140,7 @@ flowchart TB
 
 **Telegram AI assistant** built as an n8n workflow: conversational agent (OpenRouter `gpt-4o-mini`) with tools (search, weather, FX rates) and **image generation/editing** via OpenRouter **Nano Banana 2** (`google/gemini-3.1-flash-image-preview`).
 
-**Quick start:** import [`workflows/n8n-telegram-openrouter-agent.json`](workflows/n8n-telegram-openrouter-agent.json), set Telegram + OpenRouter (Header Auth `Bearer …`) + SerpAPI credentials, activate workflow.
+**Quick start:** `docker compose up -d` (see [docs/DOCKER.md](docs/DOCKER.md)), import workflow, set Telegram + OpenRouter (Header Auth `Bearer …`) + SerpAPI credentials, activate workflow. Telegram requires a public HTTPS `WEBHOOK_URL`.
 
 **Image usage:** send a **photo with caption** to edit, or message `нарисуй …` to generate. See [docs/SETUP.md](docs/SETUP.md) for details.
 

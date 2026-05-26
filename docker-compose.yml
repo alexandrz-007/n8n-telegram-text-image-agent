@@ -1,0 +1,31 @@
+# Локальный n8n для импорта workflow из ./workflows
+# Ключи API задаются в UI n8n (Credentials), не в этом файле.
+#
+# Запуск:  cp .env.example .env  →  docker compose up -d
+# UI:      http://localhost:5678
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n-telegram-openrouter
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - TZ=${TZ:-Europe/Moscow}
+      - GENERIC_TIMEZONE=${TZ:-Europe/Moscow}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL:-http://localhost:5678}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-false}
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-false}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/import:ro
+
+volumes:
+  n8n_data:

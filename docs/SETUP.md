@@ -1,5 +1,7 @@
 # Подробная настройка
 
+Если n8n ещё не установлен — сначала [DOCKER.md](DOCKER.md) (`docker compose up -d`).
+
 ## 1. Telegram-бот
 
 1. Откройте [@BotFather](https://t.me/BotFather).
@@ -42,7 +44,8 @@
 
 ## 5. Webhook и активация
 
-- Self-hosted: задайте переменную окружения `N8N_WEBHOOK_URL=https://ваш-домен/` (с `/` в конце по документации n8n).
+- **Docker:** в `.env` задайте `WEBHOOK_URL=https://ваш-публичный-домен/` (см. [DOCKER.md](DOCKER.md), ngrok или VPS).
+- **Без Docker:** переменная `N8N_WEBHOOK_URL` / `WEBHOOK_URL` на хосте n8n — публичный HTTPS URL с `/` в конце.
 - **Activate** workflow (переключатель Active).
 - В Telegram напишите боту `/start`.
 
